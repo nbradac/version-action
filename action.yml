@@ -1,25 +1,53 @@
 
-name: 'Hello World'
-description: 'Greet someone'
+name: 'Version Check'
 inputs:
-  who-to-greet:  # id of input
-    description: 'Who to greet'
+  version-string:
     required: true
-    default: 'World'
 outputs:
-  random-number:
-    description: "Random number"
-    value: ${{ steps.random-number-generator.outputs.random-number }}
+  release-version:
+    value: ${{ steps.calculate.outputs.release-version }}
+  create-branch:
+    value: ${{ steps.calculate.outputs.create-branch }}
+  snapshot-version:
+    value: ${{ steps.calculate.outputs.snapshot-version }}
+  new-branch:
+    value: ${{ steps.calculate.outputs.new-branch }}
+  branch-snapshot-version:
+    value: ${{ steps.calculate.outputs.branch-snapshot-version }}
 runs:
   using: "composite"
   steps:
-    - name: Set Greeting
-      run: echo "Hello $INPUT_WHO_TO_GREET."
+    - name: Calculate
+      id: calculate
       shell: bash
-      env:
-        INPUT_WHO_TO_GREET: ${{ inputs.who-to-greet }}
+      run: |
+        [[ "${{ inputs.version-string }}" =~ ^([0-9])\.([0-9][0-9]?)\.([0-9][0-9]?)$ ]]
 
-    - name: Random Number Generator
-      id: random-number-generator
-      run: echo "random-number=$(echo $RANDOM)" >> $GITHUB_OUTPUT
-      shell: bash
+        MAIN_BRANCH_REF="refs/heads/master"
+
+        major=${BASH_REMATCH[1]}
+        minor=${BASH_REMATCH[2]}
+        patch=${BASH_REMATCH[3]}
+
+        let "minor_incr=minor+1"
+        let "patch_incr=patch+1"
+
+        if [[ "${{ github.ref }}" == "$MAIN_BRANCH_REF" ]]; then
+          CREATE_BRANCH=true
+          SNAPSHOT_VERSION="$major.$minor_incr.$patch"
+          NEW_BRANCH="release-$major.$minor.$patch"
+          BRANCH_SNAPSHOT_VERSION="$major.$minor.$patch_incr-SNAPSHOT"
+        else
+          CREATE_BRANCH=false
+          SNAPSHOT_VERSION="$major.$minor.$patch_incr"
+          NEW_BRANCH=""
+          BRANCH_SNAPSHOT_VERSION=""
+        fi
+
+        echo "release-version=$major.$minor.$patch" >> "$GITHUB_OUTPUT"
+        echo "create-branch=$CREATE_BRANCH" >> "$GITHUB_OUTPUT"
+        echo "snapshot-version=$SNAPSHOT_VERSION-SNAPSHOT" >> "$GITHUB_OUTPUT"
+        echo "new-branch=$NEW_BRANCH" >> "$GITHUB_OUTPUT"
+        echo "branch-snapshot-version=$BRANCH_SNAPSHOT_VERSION" >> "$GITHUB_OUTPUT"
+
+        cat $GITHUB_OUTPUT
