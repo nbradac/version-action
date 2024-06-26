@@ -3,16 +3,24 @@ name: 'Version Check'
 inputs:
   version-string:
     required: true
+  main-branch-ref:
+    required: true
+    default: "refs/heads/master"
 outputs:
   release-version:
+    description: "the release string to use for the current release"
     value: ${{ steps.calculate.outputs.release-version }}
   create-branch:
+    description: "whether or not to create a new branch"
     value: ${{ steps.calculate.outputs.create-branch }}
   snapshot-version:
+    description: "the new snapshot version that should be used post release"
     value: ${{ steps.calculate.outputs.snapshot-version }}
   new-branch:
+    description: "the name of the new branch"
     value: ${{ steps.calculate.outputs.new-branch }}
   branch-snapshot-version:
+    description: "the initial snapshot version that should be used on the new branch"
     value: ${{ steps.calculate.outputs.branch-snapshot-version }}
 runs:
   using: "composite"
@@ -21,18 +29,19 @@ runs:
       id: calculate
       shell: bash
       run: |
+        # this will fail if the version-string doesn't match the regex pattern
         [[ "${{ inputs.version-string }}" =~ ^([0-9])\.([0-9][0-9]?)\.([0-9][0-9]?)$ ]]
-
-        MAIN_BRANCH_REF="refs/heads/master"
 
         major=${BASH_REMATCH[1]}
         minor=${BASH_REMATCH[2]}
         patch=${BASH_REMATCH[3]}
 
-        let "minor_incr=minor+1"
-        let "patch_incr=patch+1"
+        if [[ "${{ github.ref }}" == "${{ inputs.main-branch-ref }}" ]]; then
+          let "minor_incr=minor+1"
+          let "patch_incr=patch+1"
 
-        if [[ "${{ github.ref }}" == "$MAIN_BRANCH_REF" ]]; then
+          # TODO make sure 'patch' is equal to 0?  We shouldn't be cutting patch releases off the main branch...
+
           CREATE_BRANCH=true
           SNAPSHOT_VERSION="$major.$minor_incr.$patch"
           NEW_BRANCH="release-$major.$minor.$patch"
@@ -50,4 +59,5 @@ runs:
         echo "new-branch=$NEW_BRANCH" >> "$GITHUB_OUTPUT"
         echo "branch-snapshot-version=$BRANCH_SNAPSHOT_VERSION" >> "$GITHUB_OUTPUT"
 
+        # doesn't really do anything, but handy for debugging
         cat $GITHUB_OUTPUT
